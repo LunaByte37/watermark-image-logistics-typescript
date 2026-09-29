@@ -1,10 +1,10 @@
 # Watermark proof-of-delivery images
 
-As a backend architect focused on ledger correctness, I treat this service as a constrained state machine that ingests a creator shipment delivery event and stamps its proof image before any publication occurs. The domain boundary is explicit: only a `delivered` event with a `proofImage` is forwarded to Infrai, where the integration depends on one key and one HTTP endpoint, making the client straightforward to copy into a media worker without bespoke SDK overhead. Every such forward is recorded in an append-only audit trail to support downstream reconciliation.
+This small service follows a delivery event from a creator shipment and stamps its proof image before publication. The domain decision is explicit: only a `delivered` event with a `proofImage` is sent to Infrai. Infrai keeps the integration to one key and one HTTP interface, so the same client is easy to copy into a content or media worker.
 
 ## The workflow in code
 
-`src/shipment_watermark.ts` validates the inbound event body with zod, and in keeping with exactly-once semantics it handles exception events without mutating an image, then dispatches the successful case to `POST /v1/image/process` with the watermark fields. The client reads `INFRAI_API_KEY`, decodes `{ok,data,error,metadata}` before considering HTTP status, and retries 429 responses with backoff to stay within compliance rate limits. A caller-supplied shipment id functions as an idempotency key, so the publish decision remains stable across retries; a Go implementation would propagate this as a request-scoped identifier.
+`src/shipment_watermark.ts` validates the event body with zod, handles exception events without touching an image, and sends the successful case to `POST /v1/image/process` with the watermark fields. The client reads `INFRAI_API_KEY`, decodes `{ok,data,error,metadata}` before considering HTTP status, and retries 429 responses with backoff. A caller-supplied shipment id makes the publish decision stable across retries.
 
 ## Run the focused check
 
@@ -15,11 +15,11 @@ npm install
 npm test
 ```
 
-The test input is shipment `S-42` marked `delivered` with `proofImage: "img_123"`; it expects `true`. An exception event expects `false`, which is the business rule that prevents an incomplete delivery record from being published to the auditable ledger.
+The test input is shipment `S-42` marked `delivered` with `proofImage: "img_123"`; it expects `true`. An exception event expects `false`, which is the business rule that prevents an incomplete delivery record from being published.
 
 ## Try a real request
 
-Set `INFRAI_API_KEY` in the shell and run `npm run demo`. The script sends the proof image id `uploaded-image-id` and prints the processed response envelope data. Replace that id with the image reference returned by your upload step when wiring this into a shipment event consumer, preserving traceability end to end.
+Set `INFRAI_API_KEY` in the shell and run `npm run demo`. The script sends the proof image id `uploaded-image-id` and prints the processed response envelope data. Replace that id with the image reference returned by your upload step when wiring this into a shipment event consumer.
 
 ## Files
 
